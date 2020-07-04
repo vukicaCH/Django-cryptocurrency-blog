@@ -1,0 +1,178 @@
+{% extends 'core/base.html' %}
+{% load static %}
+{% block content %}
+	<section class="ptb-0">
+		<div class="mb-30 brdr-ash-1 opacty-5"></div>
+		<div class="container">
+			<a class="mt-10" href="/"><i class="mr-5 ion-ios-home"></i>Home<i class="mlr-10 ion-chevron-right"></i></a>
+			<a class="mt-10" href="/news">News<i class="mlr-10 ion-chevron-right"></i></a>
+			<a class="mt-10 color-ash" href="{% url 'core:post' post.id %}">{{ post.title }}</a>
+		</div><!-- container -->
+	</section>
+	
+	
+	<section>
+		<div class="container">
+			<div class="row">
+			
+				<div class="col-md-12 col-lg-8">
+					<img src="{{ post.thumbnail.url }}" alt="">
+					<h3 class="mt-30"><b>{{ post.title }}</b></h3>
+					<ul class="list-li-mr-20 mtb-15">
+						<li>by <a href="#"><b>{{ post.author }}</b></a> {{ post.timestamp|timesince }}</li>
+						<li><i class="color-primary mr-5 font-12 ion-ios-bolt"></i>{{ post.views }}</li>
+						<li><i class="color-primary mr-5 font-12 ion-chatbubbles"></i>{{ post.comments }}</li>
+					</ul>
+					
+					{{ post.text|safe }}
+					
+					<div class="float-left-right text-center mt-40 mt-sm-20">
+				
+						<ul class="mb-30 list-li-mt-10 list-li-mr-5 list-a-plr-15 list-a-ptb-7 list-a-bg-grey list-a-br-2 list-a-hvr-primary ">
+							<li><a>{{ post.get_category_display }}</a></li>
+						</ul>
+						{% if request.user.is_staff %}
+						<ul class="mb-30 list-a-hvr-primary list-li-ml-5">
+							<li><a href="{% url 'core:edit' post.id %}">Edit</a></li>
+							<li><a href="{% url 'core:delete' post.id %}">Delete</a></li>
+						</ul>
+						{% endif %}
+						
+					</div><!-- float-left-right -->
+				
+					<div class="brdr-ash-1 opacty-5"></div>
+					
+					<h4 class="p-title mt-50"><b>YOU MAY ALSO LIKE</b></h4>
+					<div class="row">
+						{% if previous_post %}
+						<div class="col-sm-6">
+							<img src="{{ previous_post.thumbnail.url }}" alt="">
+							<h4 class="pt-20"><a href="{% url 'core:post' previous_post.id %}">{{ previous_post.title }}</a></h4>
+							<ul class="list-li-mr-20 pt-10 mb-30">
+								<li class="color-lite-black">by <a href="{% url 'core:post' previous_post.id %}" class="color-black"><b>{{ previous_post.author }},</b></a>
+								{{ previous_post.timestamp|timesince }}</li>
+								<li><i class="color-primary mr-5 font-12 ion-ios-bolt"></i>{{ previous_post.views }}</li>
+								<li><i class="color-primary mr-5 font-12 ion-chatbubbles"></i>{{ previous_post.comments }}</li>
+							</ul>
+						</div><!-- col-sm-6 -->
+						{% endif %}
+						
+						{% if next_post %}
+						<div class="col-sm-6">
+							<img src="{{ next_post.thumbnail.url }}" alt="">
+							<h4 class="pt-20"><a href="{% url 'core:post' next_post.id %}">{{ next_post.title }}</h4>
+							<ul class="list-li-mr-20 pt-10 mb-30">
+								<li class="color-lite-black">by <a href="{% url 'core:post' next_post.id %}" class="color-black"><b>{{ next_post.author }},</b></a>
+								{{ next_post.timestamp|timesince }}</li>
+								<li><i class="color-primary mr-5 font-12 ion-ios-bolt"></i>{{ next_post.views }}</li>
+								<li><i class="color-primary mr-5 font-12 ion-chatbubbles"></i>{{ next_post.comments }}</li>
+							</ul>
+						</div><!-- col-sm-6 -->
+						{% else %}
+						
+						{% endif %}
+						
+					</div><!-- row -->
+					
+					<h4 class="p-title mt-20"><b>{{ post.comments }} COMMENTS</b></h4>
+					{% for comment in comments %}
+					<div class="sided-70 mb-40">
+						{% if comment.user.is_staff %}
+						<div class="s-left rounded">
+							<img src="{{ post.author.profile_picture.url }}" alt="">
+						</div><!-- s-left -->
+						{% else %}
+						<div class="s-left rounded">
+							<img src="{% static 'core/images/download.jpg' %}" alt="">
+						</div><!-- s-left -->						
+						{% endif %}
+						
+						<div class="s-right ml-100 ml-xs-85">
+							<h5><b>{{ comment.user.username }} </b></h5>
+							<p class="mtb-15">{{ comment.text }}</p>					
+						</div><!-- s-right -->
+					</div><!-- sided-70 -->
+						{% for reply in comment.replies.all  %}
+						<div class="sided-70 ml-100 ml-xs-20 mb-40">
+						
+						{% if comment.user == post.author.user %}
+						<div class="s-left rounded">
+							<img src="{{ post.author.profile_picture.url }}" alt="">
+						</div><!-- s-left -->
+						{% else %}
+						<div class="s-left rounded">
+							<img src="{% static 'core/images/download.jpg' %}" alt="">
+						</div><!-- s-left -->						
+						{% endif %}
+						<div class="s-right ml-100 ml-xs-85">
+							<h5><b>{{ reply.user.username }}</b></h5>
+							<p class="mtb-10">{{ reply.text }}</p>
+						</div><!-- s-right -->
+					</div>
+						{% endfor %}
+					<div class="sided-70 ml-100 ml-xs-20 mb-40">		
+							<form class="form-block form-plr-15 form-h-45 form-mb-20 form-brdr-lite-white mb-md-50" action="{% url 'core:reply' post.id  comment.id %}" method = 'post'>
+							{% csrf_token %}
+							<textarea class="ptb-10" name='reply' placeholder="Leave reply" required></textarea>
+							<button class="btn-brdr-grey btn-b-sm plr-15 mr-10 mt-5" type="submit"><b>REPLY</b></button>
+							<input type='hidden' name='next' value="." />
+							</form>	
+					</div>												
+					{% endfor %}
+					
+					
+					<h4 class="p-title mt-20"><b>LEAVE A COMMENT</b></h4>
+					
+					<form class="form-block form-plr-15 form-h-45 form-mb-20 form-brdr-lite-white mb-md-50" action="{% url 'core:add-comment' post.id %}" method = 'post'>
+						{% csrf_token %}
+						<textarea class="ptb-10" name='comment' placeholder="Your Comment" required></textarea>
+						<button class="btn-fill-primary plr-30" rows="4" cols="50" type="submit"><b>LEAVE A COMMENT</b></button>
+					</form>
+				</div><!-- col-md-9 -->
+				
+				<div class="d-none d-md-block d-lg-none col-md-3"></div>
+				<div class="col-md-6 col-lg-4">
+					<div class="pl-20 pl-md-0">
+						<ul class="list-block list-li-ptb-15 list-btm-border-white bg-primary text-center">
+							<li><b>1 BTC = $13,2323</b></li>
+							<li><b>1 BCH = $924</b></li>
+							<li><b>1 ETH = $1,232</b></li>
+							<li><b>1 LTC = $5611</b></li>
+							<li><b>1 DAS = $1,002</b></li>
+							<li><b>1 BCC = $99</b></li>
+						</ul>
+						
+						<div class="mtb-50">
+							<h4 class="p-title"><b>POPULAR POSTS</b></h4>
+							
+							{% for post in popular_posts %}
+							<a class="oflow-hidden pos-relative mb-20 dplay-block" href="{% url 'core:post' post.id %}">
+								<div class="wh-100x abs-tlr"><img src="{{ post.thumbnail.url }}" alt=""></div>
+								<div class="ml-120 min-h-100x">
+									<h5><b>{{ post.title }}</b></h5>
+									<h6 class="color-lite-black pt-10">by <span class="color-black"><b>{{ post.author }},</b></span> {{ post.timestamp|timesince }}</h6>
+								</div>
+							</a><!-- oflow-hidden -->
+							{% endfor %}
+							
+						</div><!-- mtb-50 -->
+						
+						<div class="mtb-50 mb-md-0">
+							<h4 class="p-title"><b>NEWSLETTER</b></h4>
+							<p class="mb-20">Subscribe to our newsletter to get notification about new updates,
+								information, discount, etc..</p>
+							<form class="nwsltr-primary-1" action="{% url 'subscribe:sub' %}" method='post'>
+								{% csrf_token %}
+								<input type="email" name='email' placeholder="Your email"/>
+								<button type="submit"><i class="ion-ios-paperplane"></i></button>
+							</form>
+						</div><!-- mtb-50 -->
+						
+					</div><!--  pl-20 -->
+				</div><!-- col-md-3 -->
+				
+			</div><!-- row -->
+			
+		</div><!-- container -->
+	</section>
+{% endblock content %}

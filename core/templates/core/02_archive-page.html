@@ -1,0 +1,81 @@
+{% extends 'core/base.html' %}
+{% load static %}
+{% block content %}
+	<section class="ptb-0">
+		<div class="mb-30 brdr-ash-1 opacty-5"></div>
+		<div class="container">
+			<a class="mt-10" href="/"><i class="mr-5 ion-ios-home"></i>Home<i class="mlr-10 ion-chevron-right"></i></a>
+			<a class="mt-10 color-ash" href="/news">News</a>
+		</div><!-- container -->
+	</section>
+	
+	<section>
+		<div class="container">
+			<div class="row">
+			
+				<div class="col-md-12 col-lg-8">
+					</br>
+					</br>
+					<h4 class="p-title"><b>ALL POSTS</b></h4>
+					<div class="row">
+						
+						{% for post in page_obj %}
+						<div class="col-sm-6">
+							<img src="{{ post.thumbnail.url }}" alt="">
+							<h4 class="pt-20"><a href="{% url 'core:post' post.id %}"><b>{{ post.title }}</b></a></h4>
+							<ul class="list-li-mr-20 pt-10 mb-30">
+								<li class="color-lite-black">by <b>{{ post.author }}</b></a>
+								{{ post.timestamp|timesince }}</li>
+								<li><i class="color-primary mr-5 font-12 ion-ios-bolt"></i>{{ post.comments }}</li>
+								<li><i class="color-primary mr-5 font-12 ion-chatbubbles"></i>{{ post.views }}</li>
+							</ul>
+						</div><!-- col-sm-6 -->
+						{% endfor %}
+						
+					</div><!-- row -->
+					
+					{% if page_obj.has_previous %}
+					<a class="dplay-block btn-brdr-primary mt-20 mb-md-50" href="?page={{ page_obj.previous_page_number }}"><b>GO BACK</b></a>
+					{% endif %}					
+					{% if page_obj.has_next %}
+					<a class="dplay-block btn-brdr-primary mt-20 mb-md-50" href="?page={{ page_obj.next_page_number }}"><b>LOAD MORE</b></a>
+					{% endif %}
+				</div><!-- col-md-9 -->
+				
+				<div class="d-none d-md-block d-lg-none col-md-3"></div>
+				<div class="col-md-6 col-lg-4">
+					<div class="pl-20 pl-md-0">
+						
+						<div class="mtb-50">
+							<h4 class="p-title"><b>POPULAR POSTS</b></h4>
+							{% for popular_post in popular_posts %}
+							<a class="oflow-hidden pos-relative mb-20 dplay-block" href="{% url 'core:post' popular_post.id %}">
+								<div class="wh-100x abs-tlr"><img src="{{ popular_post.thumbnail.url }}" alt=""></div>
+								<div class="ml-120 min-h-100x">
+									<h5><b>{{ popular_post.title }}</b></h5>
+									<h6 class="color-lite-black pt-10">by <span class="color-black"><b>{{ popular_post.author }},</b></span> {{ popular_post.timestamp }}</h6>
+								</div>
+							</a><!-- oflow-hidden -->
+							{% endfor %}
+							
+						</div><!-- mtb-50 -->
+						
+						
+						<div class="mtb-50 mb-md-0">
+							<h4 class="p-title"><b>NEWSLETTER</b></h4>
+							<p class="mb-20">Subscribe to our newsletter to get notification about new updates,
+								information, discount, etc..</p>
+							<form class="nwsltr-primary-1" action="{% url 'subscribe:sub' %}" method="post">
+								{% csrf_token %}
+								<input type="text" name='email' placeholder="Your email"/>
+								<button type="submit"><i class="ion-ios-paperplane"></i></button>
+							</form>
+						</div><!-- mtb-50 -->
+						
+					</div><!--  pl-20 -->
+				</div><!-- col-md-3 -->
+				
+			</div><!-- row -->
+		</div><!-- container -->
+	</section>
+{% endblock content %}
