@@ -1,272 +1,195 @@
-from django.shortcuts import render,redirect,reverse
-from django.contrib import messages
-from .models import Item, OrderItem, Order, User, Payment, Checkout
+from django.shortcuts import render
+from .models import *
+from subscribe.models import *
+from .forms import *
+from django.core.mail import send_mail
+from .forms import *
 from django.http import HttpResponseRedirect
-from .forms import CheckoutForm
-import stripe
+from django.urls import reverse
+from django.db.models import Q
+from django.utils import timezone
+
 from django.contrib.auth.decorators import login_required
+from django.contrib.admin.views.decorators import staff_member_required
 
-stripe.api_key = "sk_test_4eC39HqLyjWDarjtT1zdp7dc"
-
+from django.core.paginator import Paginator,EmptyPage,PageNotAnInteger
+from django.core.exceptions import ObjectDoesNotExist
 
 # Create your views here.
-def homepage(request):
-	items = Item.objects.all()
-	if request.user.is_authenticated:
-		orders = Order.objects.filter(user = request.user, ordered = False)
-		if orders:
-			order = orders[0]
-			sadrzaj = {'items':items,'order':order}
-		else:
-			sadrzaj = {'items':items}
-	else:
-		sadrzaj = {'items':items}
-		
-			
-	return render(request, 'core/index.html',sadrzaj)
-	
-def shop(request):
-	items = Item.objects.all()
-	if request.user.is_authenticated:
-		orders = Order.objects.filter(user = request.user, ordered = False)
-		if orders:
-			order = orders[0]
-			sadrzaj = {'items':items,'order':order}
-		else:
-			sadrzaj = {'items':items}
-	else:
-		sadrzaj = {'items':items}
-	return render(request, 'core/shop.html', sadrzaj)
+def get_author(user):
+	qs = Author.objects.filter(user = user)
+	if qs:
+		return qs[0]	
+	return None
 
-def shop_category(request,category):
-	items = Item.objects.filter(category = category)
-	if request.user.is_authenticated:
-		orders = Order.objects.filter(user = request.user, ordered = False)
-		if orders:
-			order = orders[0]
-			sadrzaj = {'items':items,'order':order}
-		else:
-			sadrzaj = {'items':items}
-	else:
-		sadrzaj = {'items':items}
-		
-	return render(request, 'core/shop.html',sadrzaj)
-	
-@login_required
-def cart(request):
-	orders = Order.objects.filter(user = request.user, ordered = False)
-	if orders:
-		order = orders[0]
-		sadrzaj = {'order':order}
-	else:
-		sadrzaj = {}
-	return render(request, 'core/cart.html',sadrzaj)
-	
-@login_required
-def add_to_cart(request,slug):
-	item = Item.objects.get(slug = slug)
-	orders = Order.objects.filter(user = request.user, ordered = False)
-	if orders:
-		order = orders[0]
-		qty = request.POST.get('quantity')
-		orderitem = OrderItem.objects.create(item = item, user = request.user,quantity = qty)
-		order.items.add(orderitem)
-		return HttpResponseRedirect(reverse('core:product-details',args=[item.slug]))
-	else:
-		order = Order.objects.create(user = request.user, ordered = False)
-		qty = request.POST.get('quantity')
-		orderitem = OrderItem.objects.create(item = item, user = request.user,quantity = qty)
-		order.items.add(orderitem)
-		return HttpResponseRedirect(reverse('core:product-details',args=[item.slug]))
-		
-	return render(request, 'core/product-details.html')
-@login_required
-def remove_from_cart(request, slug):
-	item = Item.objects.get(slug=slug)
-	orderitems = OrderItem.objects.filter(item = item, user = request.user)
-	if orderitems:
-		orderitem = orderitems[0]
-		if orderitem.quantity > 0:
-			orderitem.quantity -= 1
-			orderitem.save()
-		if orderitem.quantity == 0:
-			orderitem.delete()
-		return HttpResponseRedirect(reverse('core:product-details', args=[item.slug]))
-	else:
-		return HttpResponseRedirect(reverse('core:product-details', args=[item.slug]))
-	
-	return render(request, 'core/product-details.html')
-		
-		
 
-def product_details(request,slug):
-	item = Item.objects.get(slug = slug)
-
-	sadrzaj = {'item':item}
-	return render(request, 'core/product-details.html',sadrzaj)
+def index(request):
+	featured_posts = Post.objects.filter(featured = True).order_by('id')
+	
+	recent_posts = Post.objects.order_by('-timestamp')
+	
+	crypto_posts = Post.objects.filter(category = 'CM')[:4]
+	
+	popular_posts = Post.objects.order_by('-views')[:4]
+	
+		
+	context = {'featured_posts':featured_posts,
+				'recent_posts':recent_posts,
+				'crypto_posts':crypto_posts,
+				'popular_posts':popular_posts}
+	
+	return render(request, 'core/index.html',context)
+	
+def post(request,post_id):
+	popular_posts = Post.objects.order_by('-views')[:4]
+	try:
+		post = Post.objects.get(id = post_id)
+		previous_post = Post.objects.filter(timestamp__lte = post.timestamp).exclude(id = post_id).order_by('-timestamp').first()
+		next_post = Post.objects.filter(timestamp__gte = post.timestamp).exclude(id = post_id).order_by('timestamp').first()
+		comments = Comment.objects.filter(post = post)	
+		context = {'post':post,
+				'popular_posts':popular_posts,
+				'previous_post':previous_post,
+				'next_post':next_post,
+				'comments':comments}
+	except ObjectDoesNotExist:
+		return HttpResponseRedirect(reverse('core:index'))
+		
+	return render(request, 'core/03_single-post.html',context)
 	
 @login_required	
-def checkout(request):
-	form = CheckoutForm()
-	orders = Order.objects.filter(user = request.user, ordered = False)
-	if orders:
-		order = orders[0]
-		if request.method == 'POST':
-			form = CheckoutForm(request.POST)
-			if form.is_valid():
-				billing = form.save()
-				order.billing = billing
-				order.save()
-				if order.billing.payment_method == 'S':
-					messages.success(request, 'Your payment with Stripe was successful.')
-					return redirect('core:payment', payment_option = 'stripe')
-				else:
-					order.ordered  = True
-					order.save()
-					for item in order.items.all():
-						item.ordered = True
-						item.save()
-					messages.success(request, 'Your order was successful.')
-					return redirect('core:index')
-		sadrzaj = {'order':order,'form':form}
-	else:
-		sadrzaj = {'form':form}
-		
-	return render(request, 'core/checkout.html',sadrzaj)
-
-def search(request):
-	if request.method != 'POST':
-		return HttpResponseRedirect(reverse('core:homepage'))
-	else:
-		query = request.POST.get('search')
-		articles = Item.objects.filter(title__icontains = query)
-		if articles:
-			sadrzaj = {'articles':articles}
-		else:
-			sadrzaj = {}
+def add_comment(request,post_id):
+	post = Post.objects.get(id = post_id)
 	
-	return render(request, 'core/search.html',sadrzaj)
-	
-@login_required	
-def add_to_favourite(request,slug):
-	item = Item.objects.get(slug = slug)
-	if item:
-		user = request.user
-		user.favourite_products.add(item)
-		user.save()
-		return HttpResponseRedirect(reverse('core:product-details', args=[item.slug]))
-	else:
-		return HttpResponseRedirect(reverse('core:shop'))
-	sadrzaj = {'item':item}
-	return render(request, 'core/product-details.html',sadrzaj)
-@login_required	
-def favourite_products(request):
-	user = request.user
-	if user:
-		items = user.favourite_products.all()
-		sadrzaj = {'items':items}
-	else:
-		sadrzaj = {}
-	
-	return render(request, 'core/favourite-products.html',sadrzaj)
-
-def new_products(request):
-	items = Item.objects.filter(new = True)
-	if items:
-		sadrzaj = {'items':items}
-	else:
-		sadrzaj = {}
-	
-	return render(request, 'core/new-products.html',sadrzaj)
-@login_required	
-def subscribe(request):
-	info = request.POST.get('email')
-	user = request.user
-	if user:
-		if user.has_discount == True:
-			messages.error(request, "You already have a discount")
-			return HttpResponseRedirect(reverse('core:index'))
-		else:
-			if user.email:
-				email = user.email
-				if email == info:
-					order = Order.objects.get(user = request.user, id = 1, ordered = False)
-					if order:
-						order.total_fee -= (0.25 * order.total_fee)
-						order.save()
-						user.has_discount = True
-						user.save()
-						messages.success(request, 'On first order you have 25% off.')
-						return HttpResponseRedirect(reverse('core:index'))
-					else:
-						user.has_discount = True
-						user.save()
-						messages.success(request, 'On first order you have 25% off')
-						return HttpResponseRedirect(reverse('core:index'))
-				else:
-					messages.info(request, 'Email address you entered is not the same with the one you registered with')
-					return HttpResponseRedirect(reverse('core:index'))
-			else:
-				user.email = info
-				user.has_discount = True
-				user.save()
-				orders = Order.objects.filter(user = request.user, ordered = False)
-				messages.info(request, "Congratulations, you got 25% on your first order")
-				return HttpResponseRedirect(reverse('core:index'))
-	else:
-		return HttpResponseRedirect(reverse('accounts:login'))
-		
-	return render(request, 'core/index.html')
-	
-@login_required
-def payment(request, payment_option):
-	order = Order.objects.filter(user = request.user, ordered = False)[0]
-	token = request.POST.get('stripeToken')	
 	if request.method == 'POST':
-		if request.user.has_discount == True:
-			charge = stripe.Charge.create(
-				amount=int(order.discount_price()) * 100,
-				currency="usd",
-				source=token,
-				metadata={'order_id': '6735'}
-				)
-			payment = Payment()
-			payment.stripe_charge_id = charge.id
-			payment.user = request.user
-			payment.amount = charge.amount
-			payment.save()
-			order.payment = payment
-			order.ordered = True
-			order.save()
-			for item in order.items.all():
-				item.ordered = True
-				item.save()
-			messages.success(request, 'Your order was successful')
-			return HttpResponseRedirect(reverse('core:index'))					
-		else:
-			charge = stripe.Charge.create(
-				amount=int(order.total_fee()) * 100,
-				currency="usd",
-				source=token,
-				metadata={'order_id': '6735'}
-				)
-			payment = Payment()
-			payment.stripe_charge_id = charge.id
-			payment.user = request.user
-			payment.amount = charge.amount
-			payment.save()
-			order.payment = payment
-			order.ordered = True
-			order.save()
-			for item in order.items.all():
-				item.ordered = True
-				item.save()	
-			messages.success(request, 'Your order was successful')
-			return HttpResponseRedirect(reverse('core:index'))				
+		comment = request.POST.get('comment')
+		new_comment = Comment()
+		new_comment.text = comment
+		new_comment.user = request.user
+		new_comment.post = post
+		new_comment.save()
+		post.comments += 1
+		post.save()
+		return HttpResponseRedirect(reverse('core:post', args=[post.id]))
+		
+	context = {'post':post}
+	return render(request, 'core/03_single-post.html', context)
+
+@login_required	
+def reply(request, post_id, comment_id):
+	comment = Comment.objects.get(id = comment_id)
+	post = Post.objects.get(id = post_id)
+	if request.method == 'POST':
+		reply_text = request.POST.get('reply')
+		new_reply = Reply()
+		new_reply.user = request.user
+		new_reply.comment_on = comment
+		new_reply.post = post
+		new_reply.text = reply_text
+		new_reply.save()
+		comment.replies.add(new_reply)
+		comment.save()
+		post.comments += 1
+		post.save()
+		return HttpResponseRedirect(reverse('core:post',args=[post.id]))
+	context = {'comment':comment,'post':post}
+	return render(request, 'core/03_single-post.html',context)
 	
-	return render(request, 'core/payment.html')
+def faq(request):
+	faqs = FAQ.objects.all()
 	
+	context = {'faqs':faqs}
+	return render(request, 'core/04_FAQs.html',context)
+	
+def faq_single(request, faq_id):
+	faq = FAQ.objects.get(id = faq_id)
+	
+	context = {'faq':faq}
+	return render(request, 'core/05_FAQs-single.html',context)
+
+	
+def contact(request):
+	
+	if request.method == 'POST':
+		full_name = request.POST.get('full-name')
+		subject = 'Email from ' + str(full_name) 
+		email = request.POST.get('email')
+		message = request.POST.get('message')
+		send_mail(
+				subject,
+				str(message),
+				str(email),
+				['vuk.tsa.mes@gmail.com'],
+				fail_silently=False)
+		
+	
+	return render(request, 'core/06_contact-us.html')
+	
+def news(request):
+	posts = Post.objects.all()
+	popular_posts = Post.objects.order_by('-views')[:4]
+	paginator = Paginator(posts, 4)
+	
+	try:
+		page_number = request.GET.get('page')
+		page_obj = paginator.get_page(page_number)
+	except EmptyPage:
+		page_obj = paginator.get_page(num_pages)
+	except PageNotAnInteger:
+		page_obj = paginator.get_page(1)
+	
+	context = {'posts':posts,
+				'popular_posts':popular_posts,
+				'page_obj':page_obj}
 				
-			
-			
+	return render(request, 'core/02_archive-page.html', context)
+	
+	
+def search(request):
+	posts = Post.objects.all()
+	query = request.GET.get('query')
+	popular_posts = Post.objects.order_by('-views')[:4]
+	
+	if query:
+		posts = Post.objects.filter(Q(title__icontains = query) | Q(overview__icontains = query) | Q(text__icontains = query))
+		
+	context = {'posts':posts,
+				'popular_posts':popular_posts}
+				
+	return render(request, 'core/search.html',context)
+	
+@staff_member_required	
+def create(request):
+	form = PostForm(request.POST, request.FILES)
+	author = get_author(request.user)
+	if request.method == 'POST':
+		if form.is_valid():
+			new_post = form.save(commit = False)
+			new_post.author = author
+			new_post.timestamp = timezone.now()
+			new_post.save()
+			return HttpResponseRedirect(reverse('core:news'))
+	
+	context = {'form':form}
+	return render(request, 'core/create.html',context)
+	
+@staff_member_required		
+def edit(request, post_id):
+	post  = Post.objects.get(id = post_id)
+	form = PostForm(instance = post)
+	
+	if request.method == 'POST':
+		form = PostForm(request.POST,request.FILES, instance = post)
+		if form.is_valid():
+			form.save()
+			return HttpResponseRedirect(reverse('core:post', args=[post.id]))
+	context = {'form':form, 'post':post}
+	return render(request, 'core/edit.html',context)
+
+@staff_member_required	
+def delete(request, post_id):
+	post = Post.objects.get(id = post_id)
+	post.delete()
+	return HttpResponseRedirect(reverse('core:news'))
+	
 	
